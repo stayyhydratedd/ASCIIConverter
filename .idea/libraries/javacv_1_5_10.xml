@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="javacv-1.5.10">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/libs/javacv-1.5.10.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

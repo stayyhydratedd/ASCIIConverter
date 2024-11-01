@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="ffmpeg-6.1.1-1.5.10-windows-x86_64">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/libs/ffmpeg-6.1.1-1.5.10-windows-x86_64.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
