@@ -1,7 +1,6 @@
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.Java2DFrameConverter;
-import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.imgcodecs.Imgcodecs;
@@ -15,28 +14,27 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class SymbolSequenceFromImage {
-    static {
-        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-    }
+
     private final static Object LOCK = new Object();
 
-    private final static VideoCapture VIDEO_CAPTURE = new VideoCapture(SomeSettings.VIDEO_FILE.getPath());
-    private final static double FPS = Math.round(VIDEO_CAPTURE.get(Videoio.CAP_PROP_FPS));
-    private final static int FRAMES = (int) VIDEO_CAPTURE.get(Videoio.CAP_PROP_FRAME_COUNT);
-    private final static int DELAY_BETWEEN_FRAMES = (int) (1000000 / FPS);
+    public static File VIDEO_FILE;
+    public static VideoCapture VIDEO_CAPTURE;
+    private static double FPS;
+    private static int FRAMES;
+    private static int DELAY_BETWEEN_FRAMES;
 
-    private final static double FRAME_WIDTH = VIDEO_CAPTURE.get(Videoio.CAP_PROP_FRAME_WIDTH);
-    private final static double FRAME_HEIGHT = VIDEO_CAPTURE.get(Videoio.CAP_PROP_FRAME_HEIGHT);
+    private static double FRAME_WIDTH;
+    private static double FRAME_HEIGHT;
 
-    public final static int WIDTH_SYMBOL_COUNT = 120;
-    private final static int WIDTH_IN_PX = (int) (FRAME_WIDTH / WIDTH_SYMBOL_COUNT);
-    public final static int HEIGHT_SYMBOL_COUNT = (int) (FRAME_HEIGHT / WIDTH_IN_PX * 0.55);
-    private final static int HEIGHT_IN_PX = (int) (FRAME_HEIGHT / HEIGHT_SYMBOL_COUNT);
+    public static int WIDTH_SYMBOL_COUNT;
+    private static int WIDTH_STEP_IN_PX;
+    public static int HEIGHT_SYMBOL_COUNT;
+    private static int HEIGHT_STEP_IN_PX;
 
     private static List<String> ASCII_FRAME_LIST = new LinkedList<>();
     private final static StringBuilder ASCII_FRAME = new StringBuilder();
-    private static final FFmpegFrameGrabber FRAME_GRABBER = new FFmpegFrameGrabber(SomeSettings.VIDEO_FILE);
-    private static final Java2DFrameConverter CONVERTER = new Java2DFrameConverter();
+    private static FFmpegFrameGrabber FRAME_GRABBER;
+    private final static Java2DFrameConverter CONVERTER = new Java2DFrameConverter();
 
 //    private final static char[] ASCII_SYMBOLS = {'@', '%', '#', '*', '+', '=', '-', ':', '.', ' '};
 //    private final static char[] ASCII_SYMBOLS_INVERT = {' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'};
@@ -46,21 +44,36 @@ public class SymbolSequenceFromImage {
         printInfo();
     }
 
-    public static void execution(boolean saveVideo) {
-        runThreads();
-        boolean needToSave = saveVideo;
+    public static void execution(boolean needToSave, VideoCapture videoCapture, File videoFile) {
+        VIDEO_FILE = videoFile;
+        VIDEO_CAPTURE = videoCapture;
+        initializeVideoParameters();
+        runThreads(needToSave);
         SomeSettings.setDefaultTitleAndBat();
         showASCIIVideo(needToSave, false);
     }
-    private static void runThreads(){
-        runConvertingThread();
+    private static void initializeVideoParameters(){
+        FPS = Math.round(VIDEO_CAPTURE.get(Videoio.CAP_PROP_FPS));
+        FRAMES = (int) VIDEO_CAPTURE.get(Videoio.CAP_PROP_FRAME_COUNT);
+        DELAY_BETWEEN_FRAMES = (int) (1000000 / FPS);
+        FRAME_WIDTH = VIDEO_CAPTURE.get(Videoio.CAP_PROP_FRAME_WIDTH);
+        FRAME_HEIGHT = VIDEO_CAPTURE.get(Videoio.CAP_PROP_FRAME_HEIGHT);
+        WIDTH_SYMBOL_COUNT = 120;
+        WIDTH_STEP_IN_PX = (int) (FRAME_WIDTH / WIDTH_SYMBOL_COUNT);
+        HEIGHT_SYMBOL_COUNT = (int) (FRAME_HEIGHT / WIDTH_STEP_IN_PX * 0.55);
+        HEIGHT_STEP_IN_PX = (int) (FRAME_HEIGHT / HEIGHT_SYMBOL_COUNT);
+        FRAME_GRABBER = new FFmpegFrameGrabber(VIDEO_FILE);
+    }
+
+    private static void runThreads(boolean needToSave){
+        runConvertingThread(needToSave);
         loadingThread().start();
     }
 
-    private static void runConvertingThread() {
+    private static void runConvertingThread(boolean needToSave) {
         Thread thread = new Thread(() -> {
             try {
-                addASCIIFrameToList();
+                addASCIIFrameToList(needToSave);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -75,10 +88,14 @@ public class SymbolSequenceFromImage {
         return Imgcodecs.imdecode(new MatOfByte(byteArrayOutputStream.toByteArray()), Imgcodecs.IMREAD_GRAYSCALE);
     }
 
-    private static void addASCIIFrameToList() throws IOException {
+    private static void addASCIIFrameToList(boolean needToSave) throws IOException {
 
         FRAME_GRABBER.start();
-        ASCII_FRAME_LIST.add(Integer.toString(DELAY_BETWEEN_FRAMES));
+        if(needToSave) {
+            ASCII_FRAME_LIST.add(Integer.toString(DELAY_BETWEEN_FRAMES));
+            ASCII_FRAME_LIST.add(Integer.toString(WIDTH_SYMBOL_COUNT));
+            ASCII_FRAME_LIST.add(Integer.toString(HEIGHT_SYMBOL_COUNT));
+        }
         for (int i = 0; i < FRAMES; i++) {
             Frame frame = FRAME_GRABBER.grabImage();
             BufferedImage bi = CONVERTER.convert(frame);
@@ -87,21 +104,25 @@ public class SymbolSequenceFromImage {
             int currentCol = 0;
             int currentRow = 0;
             for (int j = 0; j < FRAME_HEIGHT; j++) {
-                if (j % HEIGHT_IN_PX == 0 && currentRow != HEIGHT_SYMBOL_COUNT) {
-                    for (int k = 0; k < FRAME_WIDTH; k++) {
-                        if (k % WIDTH_IN_PX == 0) {
-                            if (currentCol == WIDTH_SYMBOL_COUNT) {
-                                currentCol = 0;
-                                continue;
+                if (j % HEIGHT_STEP_IN_PX == 0 && currentRow != HEIGHT_SYMBOL_COUNT) {
+                    if(currentRow < HEIGHT_SYMBOL_COUNT) {
+                        for (int k = 0; k < FRAME_WIDTH; k++) {
+                            if (k % WIDTH_STEP_IN_PX == 0) {
+                                if (currentCol < WIDTH_SYMBOL_COUNT) {
+                                    ASCII_FRAME.append(calculateGrayDepth(image.get(j, k)[0], ASCII_SYMBOLS_CUSTOM));
+                                    currentCol++;
+                                } else {
+                                    currentCol = 0;
+                                    continue;
+                                }
                             }
-                            ASCII_FRAME.append(calculateGrayDepth(image.get(j, k)[0], ASCII_SYMBOLS_CUSTOM));
-                            currentCol++;
+                            if (k + 4 == WIDTH_SYMBOL_COUNT * WIDTH_STEP_IN_PX) {
+                                ASCII_FRAME.append("\n");
+                                break;
+                            }
                         }
-                        if (k == FRAME_WIDTH - 2) {
-                            ASCII_FRAME.append("\n");
-                        }
+                        currentRow++;
                     }
-                    currentRow++;
                 }
             }
             ASCII_FRAME_LIST.add(ASCII_FRAME.toString());
@@ -151,16 +172,16 @@ public class SymbolSequenceFromImage {
             else
                 System.out.println("Your ASCII file ready, press Enter to continue..");
 
-            int delayBetweenFrames = Integer.parseInt(ASCII_FRAME_LIST.getFirst());
-
             new Scanner(System.in).nextLine();
 
             while (true) {
                 for (String ASCIIFrame : ASCII_FRAME_LIST) {
                     System.out.print(ASCIIFrame);
                     try {
-                        if(savedFile)
+                        if(savedFile) {
+                            int delayBetweenFrames = Integer.parseInt(ASCII_FRAME_LIST.getFirst());
                             TimeUnit.MICROSECONDS.sleep(delayBetweenFrames);
+                        }
                         else
                             TimeUnit.MICROSECONDS.sleep(DELAY_BETWEEN_FRAMES);
                     } catch (InterruptedException e) {
@@ -193,7 +214,7 @@ public class SymbolSequenceFromImage {
                 Height symbols count: %d
                 Height in px between symbols: %d
                 """, FRAMES, FPS, DELAY_BETWEEN_FRAMES, FRAME_WIDTH, FRAME_HEIGHT,
-                WIDTH_SYMBOL_COUNT, WIDTH_IN_PX, HEIGHT_SYMBOL_COUNT, HEIGHT_IN_PX);
+                WIDTH_SYMBOL_COUNT, WIDTH_STEP_IN_PX, HEIGHT_SYMBOL_COUNT, HEIGHT_STEP_IN_PX);
     }
     private static char ASCIISymbol(Symbol s){
         return s.appendSymbolOnValue();
