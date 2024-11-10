@@ -13,7 +13,7 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-public class SymbolSequenceFromImage {
+public class VideoToASCII {
 
     private final static Object LOCK = new Object();
 
@@ -36,9 +36,7 @@ public class SymbolSequenceFromImage {
     private static FFmpegFrameGrabber FRAME_GRABBER;
     private final static Java2DFrameConverter CONVERTER = new Java2DFrameConverter();
 
-//    private final static char[] ASCII_SYMBOLS = {'@', '%', '#', '*', '+', '=', '-', ':', '.', ' '};
-//    private final static char[] ASCII_SYMBOLS_INVERT = {' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'};
-    private final static char[] ASCII_SYMBOLS_CUSTOM = {' ', '.', ':', '!', '-', '~', '=', '+', '*', '#', '%', '$', '@'};
+    public final static char[] ASCII_SYMBOLS_CUSTOM = {' ', '.', ':', '!', '-', '~', '=', '+', '*', '#', '%', '$', '@'};
 
     public static void main(String[] args) {
         printInfo();
@@ -81,7 +79,7 @@ public class SymbolSequenceFromImage {
         thread.start();
     }
 
-    private static Mat bufferedImage2Mat(BufferedImage image) throws IOException {
+    public static Mat bufferedImage2Mat(BufferedImage image) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         ImageIO.write(image, "png", byteArrayOutputStream);
         byteArrayOutputStream.flush();
@@ -131,7 +129,7 @@ public class SymbolSequenceFromImage {
         FRAME_GRABBER.stop();
     }
 
-    private static char calculateGrayDepth(double pxValue, char[] ASCIIChars) {
+    public static char calculateGrayDepth(double pxValue, char[] ASCIIChars) {
         double brightnessStep = (double) 255 / ASCIIChars.length;
         int pxBrightness = (int) (pxValue / brightnessStep) == ASCIIChars.length ?
                 (int) (pxValue / brightnessStep - 1) : (int) (pxValue / brightnessStep);
@@ -140,7 +138,7 @@ public class SymbolSequenceFromImage {
     }
 
     private static Thread loadingThread() {
-        return new Thread(SymbolSequenceFromImage::printLoading);
+        return new Thread(VideoToASCII::printLoading);
     }
 
     private static void printLoading() {
